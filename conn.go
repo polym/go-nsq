@@ -60,7 +60,8 @@ type Conn struct {
 
 	config *Config
 
-	conn    *net.TCPConn
+	//	conn    *net.TCPConn
+	conn    net.Conn
 	tlsConn *tls.Conn
 	addr    string
 
@@ -146,11 +147,20 @@ func (c *Conn) Connect() (*IdentifyResponse, error) {
 		Timeout:   c.config.DialTimeout,
 	}
 
-	conn, err := dialer.Dial("tcp", c.addr)
+	var (
+		conn net.Conn
+		err  error
+	)
+
+	if c.config.TlsDirect {
+		conn, err = tls.DialWithDialer(dialer, "tcp", c.addr, c.config.TlsConfig)
+	} else {
+		conn, err = dialer.Dial("tcp", c.addr)
+	}
 	if err != nil {
 		return nil, err
 	}
-	c.conn = conn.(*net.TCPConn)
+	c.conn = conn
 	c.r = conn
 	c.w = conn
 
@@ -188,7 +198,10 @@ func (c *Conn) Connect() (*IdentifyResponse, error) {
 func (c *Conn) Close() error {
 	atomic.StoreInt32(&c.closeFlag, 1)
 	if c.conn != nil && atomic.LoadInt64(&c.messagesInFlight) == 0 {
-		return c.conn.CloseRead()
+		if conn, ok := c.conn.(*net.TCPConn); ok {
+			return conn.CloseRead()
+		}
+		return c.conn.Close()
 	}
 	return nil
 }
@@ -635,7 +648,11 @@ func (c *Conn) close() {
 	c.stopper.Do(func() {
 		c.log(LogLevelInfo, "beginning close")
 		close(c.exitChan)
-		c.conn.CloseRead()
+		if conn, ok := c.conn.(*net.TCPConn); ok {
+			conn.CloseRead()
+		} else {
+			c.conn.Close()
+		}
 
 		c.wg.Add(1)
 		go c.cleanup()
@@ -689,7 +706,11 @@ func (c *Conn) waitForCleanup() {
 	// this blocks until readLoop and writeLoop
 	// (and cleanup goroutine above) have exited
 	c.wg.Wait()
-	c.conn.CloseWrite()
+	if conn, ok := c.conn.(*net.TCPConn); ok {
+		conn.CloseWrite()
+	} else {
+		c.conn.Close()
+	}
 	c.log(LogLevelInfo, "clean close complete")
 	c.delegate.OnClose(c)
 }

@@ -146,6 +146,7 @@ type Config struct {
 
 	// To set TLS config, use the following options:
 	//
+	// tls_direct - Bool enable using TLS connection
 	// tls_v1 - Bool enable TLS negotiation
 	// tls_root_ca_file - String path to file containing root CA
 	// tls_insecure_skip_verify - Bool indicates whether this client should verify server certificates
@@ -153,6 +154,7 @@ type Config struct {
 	// tls_key - String path to file containing private key for certificate
 	// tls_min_version - String indicating the minimum version of tls acceptable ('ssl3.0', 'tls1.0', 'tls1.1', 'tls1.2')
 	//
+	TlsDirect bool        `opt:"tls_direct"`
 	TlsV1     bool        `opt:"tls_v1"`
 	TlsConfig *tls.Config `opt:"tls_config"`
 
